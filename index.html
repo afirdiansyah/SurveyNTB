@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Dashboard Identifikasi Risiko Jembatan Nusa Tenggara Barat 2026</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { 
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a', 950: '#0f172a' },
+                        darkglass: 'rgba(15, 23, 42, 0.92)',
+                        lightglass: 'rgba(255, 255, 255, 0.95)'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- CSS Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #334155; }
+
+        html, body { 
+            position: fixed; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            margin: 0; 
+            padding: 0;
+            touch-action: manipulation;
+        }
+
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; z-index: 0; }
+
+        .glass { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.15); }
+        .dark .glass { border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+
+        /* Popup Styling Dynamic */
+        .leaflet-popup-content-wrapper { background: transparent !important; box-shadow: none !important; padding: 0 !important; }
+        .leaflet-popup-tip-container { display: none; }
+        .leaflet-popup-content { margin: 0 !important; width: 280px !important; }
+        @media (min-width: 640px) { .leaflet-popup-content { width: 310px !important; } }
+
+        /* LANDSCAPE FIX */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .leaflet-popup-content { width: 380px !important; }
+            .popup-card-container { flex-direction: row !important; max-height: 80vh !important; }
+            .popup-slider-box { width: 40% !important; height: auto !important; min-height: 120px !important; }
+            .popup-details-box { width: 60% !important; }
+        }
+
+        /* Smooth Panel Animations */
+        #leftSidebar, #rightPanel, #tableContainer {
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+            will-change: transform, opacity;
+        }
+
+        /* Responsive Breakpoints & Drawers */
+        @media (max-width: 1024px) {
+            #leftSidebar {
+                top: 0; left: 0; bottom: 0;
+                width: 100%; max-width: 340px; height: 100%;
+                border-radius: 0;
+                transform: translateX(-100%);
+            }
+            #leftSidebar.mobile-show { transform: translateX(0); }
+
+            #rightPanel {
+                top: 0; right: 0; bottom: 0;
+                width: 100%; max-width: 340px; height: 100%;
+                border-radius: 0;
+                transform: translateX(100%);
+            }
+            #rightPanel.mobile-show { transform: translateX(0); }
+
+            #tableContainer {
+                left: 0.5rem !important;
+                right: 0.5rem !important;
+                bottom: 0.5rem !important;
+                max-height: 48vh !important;
+                width: auto !important;
+            }
+        }
+
+        @media (max-height: 500px) and (orientation: landscape) {
+            #tableContainer { max-height: 45vh !important; }
+        }
+
+        @media (max-width: 640px) {
+            #leftSidebar, #rightPanel { max-width: 100%; }
+        }
+
+        #leftSidebar.hidden-panel { transform: translateX(-120%); opacity: 0; pointer-events: none; }
+        #rightPanel.hidden-panel { transform: translateX(120%); opacity: 0; pointer-events: none; }
+
+        /* Desktop Layout Boundaries */
+        @media (min-width: 1025px) {
+            #leftSidebar { max-height: calc(100vh - 14rem); }
+            #rightPanel { max-height: calc(100vh - 7rem); }
+            #tableContainer {
+                bottom: 1rem;
+                left: 400px;
+                right: 340px;
+            }
+        }
+
+        /* Radar Pulse untuk Inset Map */
+        @keyframes radar-pulse {
+            0% { transform: scale(0.95); opacity: 0.9; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { transform: scale(0.95); opacity: 0.9; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .inset-radar-marker {
+            width: 14px;
+            height: 14px;
+            background: #3b82f6;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            animation: radar-pulse 2s infinite ease-in-out;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-brand-950 dark:text-gray-200 transition-colors duration-500 selection:bg-brand-500 selection:text-white font-sans">
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="fixed inset-0 bg-brand-950 z-[9999] flex flex-col items-center justify-center transition-all duration-700">
+        <div class="relative w-20 h-20 md:w-24 md:h-24 mb-6">
+            <div class="absolute inset-0 border-4 border-brand-900 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-brand-500 rounded-full border-t-transparent animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center font-bold text-brand-500 text-sm md:text-base">GIS</div>
+        </div>
+        <h2 class="text-lg md:text-xl font-bold text-white tracking-widest animate-pulse">SINKRONISASI DATA...</h2>
+        <p class="text-xs text-gray-500 mt-2">Bina Marga Nasional</p>
+    </div>
+
+    <!-- CUSTOM MODERN ALERT MODAL -->
+    <div id="customAlertOverlay" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div id="customAlertBox" class="glass bg-white/90 dark:bg-brand-950/90 w-[85%] max-w-sm rounded-3xl p-6 shadow-2xl transform scale-95 transition-transform duration-300 border border-white/20 dark:border-gray-700/50 flex flex-col items-center text-center">
+            <div class="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mb-4 border border-rose-200 dark:border-rose-800/50 shadow-inner">
+                <svg class="w-7 h-7 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 id="customAlertTitle" class="text-base font-extrabold text-gray-900 dark:text-white mb-1.5">Data Kosong</h3>
+            <p id="customAlertMessage" class="text-xs text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">Pesan alert di sini.</p>
+            <button onclick="closeCustomAlert()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl transition-colors shadow-lg shadow-brand-500/30 flex items-center justify-center gap-2">
+                Mengerti
+            </button>
+        </div>
+    </div>
+
+    <!-- Peta Fullscreen -->
+    <div id="map"></div>
+
+    <!-- PETA MINI INSET -->
+    <div class="absolute bottom-6 left-6 z-[600] w-48 h-36 lg:w-52 lg:h-40 glass bg-lightglass dark:bg-darkglass rounded-2xl shadow-2xl overflow-hidden hidden lg:flex flex-col border border-white/20 transition-all">
+        <div class="px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
+            <span class="text-[9px] font-extrabold uppercase tracking-widest text-gray-500 dark:text-gray-400">Overview • Nusa Tenggara Barat</span>
+            <div class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></div>
+        </div>
+        <div id="insetMap" class="w-full flex-1 bg-gray-200 dark:bg-gray-900"></div>
+    </div>
+
+    <!-- Tombol Kontrol Peta Atas Kanan -->
+    <div class="absolute top-3 right-3 md:top-5 md:right-5 z-[400] flex items-center gap-1.5 md:gap-2">
+        <button id="showLeftBtn" class="glass bg-lightglass dark:bg-darkglass hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 md:p-2.5 rounded-xl shadow-xl transition-all flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <span class="text-xs font-bold lg:hidden">Filter</span>
+        </button>
+
+        <button id="showRightBtn" class="glass bg-lightglass dark:bg-darkglass hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 md:p-2.5 rounded-xl shadow-xl transition-all flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path></svg>
+            <span class="text-xs font-bold lg:hidden">Statistik</span>
+        </button>
+
+        <button id="resetViewBtn" class="glass bg-lightglass dark:bg-darkglass hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 p-2 md:px-3.5 md:py-2.5 rounded-xl shadow-xl font-bold text-xs transition-all flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            <span class="hidden sm:inline">Reset</span>
+        </button>
+    </div>
+
+    <!-- SIDEBAR KIRI -->
+    <aside id="leftSidebar" class="absolute top-0 left-0 lg:top-5 lg:left-5 w-full sm:w-[340px] lg:w-[380px] h-full lg:h-auto glass bg-lightglass dark:bg-darkglass lg:rounded-3xl shadow-2xl z-[500] flex flex-col overflow-hidden">
+        <div class="p-3.5 md:p-4 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/30 dark:bg-gray-900/30">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-blue-400 flex items-center justify-center text-white shadow-md shrink-0">
+                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="font-extrabold tracking-tight text-xs text-gray-900 dark:text-white uppercase leading-snug">Identifikasi Risiko Jembatan</h1>
+                    <p class="text-[9px] md:text-[10px] text-gray-500 dark:text-gray-400 font-medium">Bina Marga • ntb</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button id="themeToggle" class="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-brand-500 dark:text-gray-400 transition-colors">
+                    <svg id="icon-dark" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="icon-light" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                </button>
+                <button id="hideLeftBtn" class="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-red-500 dark:text-gray-400 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-3.5 md:p-4 border-b border-gray-200/50 dark:border-gray-700/50 space-y-2.5">
+            <div class="relative">
+                <svg class="w-4 h-4 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <input type="text" id="searchInput" placeholder="Cari nomor/nama jembatan / ruas..." class="w-full pl-9 pr-3 py-1.5 bg-gray-100/50 dark:bg-gray-800/50 border border-transparent dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs text-gray-800 dark:text-gray-200 transition-all">
+            </div>
+            <div>
+                <h3 class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Layer Analisis Risiko</h3>
+                <div class="flex flex-wrap gap-1 max-h-20 lg:max-h-24 overflow-y-auto pr-1" id="filterContainer"></div>
+                <div id="filterHint" class="hidden mt-2 p-2 bg-gray-100/50 dark:bg-gray-800/50 rounded-lg text-[10px] font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                    <span class="text-rose-500 font-bold">*Tips:</span> Titik merah berbadge angka menandakan jembatan memiliki multi-risiko bencana.
+                </div>
+            </div>
+        </div>
+
+        <div id="bridgeList" class="flex-1 overflow-y-auto p-2.5 space-y-1.5"></div>
+    </aside>
+
+    <!-- PANEL KANAN -->
+    <section id="rightPanel" class="absolute top-0 right-0 lg:top-5 lg:right-5 w-full sm:w-[340px] lg:w-80 h-full lg:h-auto glass bg-lightglass dark:bg-darkglass lg:rounded-3xl shadow-2xl z-[500] flex flex-col p-4 space-y-3 overflow-y-auto">
+        <div class="flex justify-between items-center border-b border-gray-200/50 dark:border-gray-700/50 pb-2">
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Ringkasan Ancaman</h2>
+            <button id="hideRightBtn" class="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-lg">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 mb-1 shrink-0">
+            <div class="bg-gray-100/50 dark:bg-gray-800/50 p-2.5 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 text-center">
+                <div class="text-[9px] text-gray-500 font-bold uppercase">Titik Tampil</div>
+                <div id="stat-total" class="text-lg lg:text-xl font-black text-brand-600 dark:text-brand-400">0</div>
+            </div>
+            <div id="cardMultiRisk" class="bg-rose-50/50 dark:bg-rose-900/20 p-2.5 rounded-2xl border border-rose-200/50 dark:border-rose-900/30 text-center relative overflow-hidden cursor-pointer hover:scale-105 transition-transform">
+                <div class="absolute -right-2 -top-2 w-8 h-8 bg-rose-500/20 rounded-full blur-lg"></div>
+                <div class="text-[9px] text-rose-600 dark:text-rose-400 font-bold uppercase relative z-10">Multi-Risiko</div>
+                <div id="stat-multi" class="text-lg lg:text-xl font-black text-rose-600 dark:text-rose-400 relative z-10">0</div>
+            </div>
+        </div>
+        <div class="relative w-full h-24 sm:h-28 lg:h-32 shrink-0">
+            <canvas id="riskChart"></canvas>
+        </div>
+        <div class="border-t border-gray-200/50 dark:border-gray-700/50 pt-2 shrink-0">
+            <div id="statList" class="space-y-1 text-[10px] font-medium max-h-36 sm:max-h-40 lg:max-h-44 overflow-y-auto pr-1"></div>
+        </div>
+    </section>
+
+    <!-- Tombol Buka Tabel Bawah -->
+    <button id="toggleTableBtn" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-[400] glass bg-gray-900/90 hover:bg-black dark:bg-white/10 dark:hover:bg-white/20 text-white shadow-2xl px-5 py-2 md:px-7 md:py-2.5 rounded-full font-bold text-xs transition-all flex items-center gap-2 border border-white/10 whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+        Tampilkan Database Tabel
+    </button>
+
+    <!-- Tabel Data -->
+    <div id="tableContainer" class="absolute glass bg-lightglass dark:bg-darkglass rounded-2xl lg:rounded-3xl shadow-2xl z-[1000] translate-y-[150%] flex flex-col max-h-[45vh] lg:max-h-[260px] border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+        <div class="flex justify-between items-center px-3.5 py-2 md:px-5 md:py-2.5 border-b border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
+            <div class="flex items-center gap-2">
+                <div class="w-1.5 h-4 bg-brand-500 rounded-full"></div>
+                <h3 class="font-extrabold text-xs text-gray-800 dark:text-white">Tabel Atribut Survei Lapangan</h3>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="exportCsvBtn" class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-md">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    CSV
+                </button>
+                <button id="closeTableBtn" class="w-6 h-6 flex items-center justify-center bg-gray-200/50 dark:bg-gray-700/50 hover:bg-red-500 hover:text-white rounded-full transition-colors">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+        <div class="overflow-x-auto overflow-y-auto flex-1 p-0 relative">
+            <table class="w-full text-left text-xs whitespace-nowrap">
+                <thead class="bg-gray-100/80 dark:bg-gray-900/80 sticky top-0 backdrop-blur-md z-10 text-gray-500 dark:text-gray-400 uppercase tracking-wider text-[9px] font-bold">
+                    <tr>
+                        <th class="px-3 md:px-5 py-2">No Jembatan</th>
+                        <th class="px-3 md:px-5 py-2">Nama Jembatan</th>
+                        <th class="px-3 md:px-5 py-2">Ruas</th>
+                        <th class="px-3 md:px-5 py-2">Risiko Terdeteksi</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-gray-100/50 dark:divide-gray-800/50"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Scripts Leaflet & Chart.js -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const LAYER_URL = "https://gisportal.binamarga.pu.go.id/arcgis/rest/services/Hosted/survey123_910cf71578fd44d6ad9988f47d4cfb86_results/FeatureServer/0";
+
+        const map = L.map('map', { zoomControl: false, closePopupOnClick: true }).setView([-6.8, 107.4], 9);
+        window.map = map; 
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        const lightBasemap = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+        const darkBasemap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' });
+        darkBasemap.addTo(map);
+
+        // INISIALISASI PETA MINI INSET
+        const insetMap = L.map('insetMap', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false }).setView([-8.6529, 117.3616], 7);
+        const insetLightBasemap = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 10 });
+        const insetDarkBasemap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 10 });
+        insetDarkBasemap.addTo(insetMap);
+        let insetMarker = null;
+
+        function updateInsetMarker(latlng) {
+            if (insetMarker) insetMap.removeLayer(insetMarker);
+            const radarIcon = L.divIcon({
+                className: 'custom-radar-container',
+                html: '<div class="inset-radar-marker"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+            insetMarker = L.marker(latlng, { icon: radarIcon }).addTo(insetMap);
+            insetMap.setView(latlng, 7, { animate: true });
+        }
+
+        // FUNGSI CUSTOM ALERT MODERN
+        function showCustomAlert(title, message) {
+            document.getElementById('customAlertTitle').innerText = title;
+            document.getElementById('customAlertMessage').innerText = message;
+            const overlay = document.getElementById('customAlertOverlay');
+            const box = document.getElementById('customAlertBox');
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeCustomAlert() {
+            const overlay = document.getElementById('customAlertOverlay');
+            const box = document.getElementById('customAlertBox');
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        let globalFeatures = [];
+        let geojsonLayer;
+        let riskChartInstance = null;
+        let activeMarkerLatLng = null;
+        window.sliderState = {};
+
+        let currentFilter = 'all'; 
+        let activeFilteredFeatures = [];
+
+        const riskTypes = [
+            { id: 'banjir', name: 'Banjir', hex: '#1D4ED8', tw: 'bg-blue-700', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 5H9L8 4z"></path></svg>' },
+            { id: 'longsor', name: 'Longsor', hex: '#854D0E', tw: 'bg-amber-800', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 21l9-18 9 18H3z"></path></svg>' },
+            { id: 'gempabumi', name: 'Gempa Bumi', hex: '#D97706', tw: 'bg-amber-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>' },
+            { id: 'cuacaekstrim', name: 'Cuaca Ekstrim', hex: '#7C3AED', tw: 'bg-purple-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>' },
+            { id: 'odol_bebanberlebih', name: 'ODOL (Beban)', hex: '#EA580C', tw: 'bg-orange-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10h2m10 0h2v-4m0 0V9a1 1 0 00-1-1h-3.586a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 007.586 5H4"></path></svg>' },
+            { id: 'korosi', name: 'Korosi', hex: '#CA8A04', tw: 'bg-yellow-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 5H9L8 4z"></path></svg>' },
+            { id: 'kualitaskonstruksiyangburuk', name: 'Konstruksi', hex: '#DB2777', tw: 'bg-pink-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>' },
+            { id: 'kerusakanakibatbendaasing', name: 'Benda Asing', hex: '#0891B2', tw: 'bg-cyan-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>' },
+            { id: 'vandalisme', name: 'Vandalisme', hex: '#0D9488', tw: 'bg-teal-600', svgIcon: '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>' }
+        ];
+
+        function parseJembatan(str) {
+            if (!str) return { no: '-', nama: '-' };
+            const match = str.match(/^([\d\.]+)(.*)$/);
+            return match ? { no: match[1].trim(), nama: match[2].trim() } : { no: '-', nama: str };
+        }
+        function checkRisk(val) { return val && (val.toString().toLowerCase() === 'yes' || val === 1 || val === '1'); }
+
+        function getRiskProfile(p, activeFilter = 'all') {
+            let activeRisks = riskTypes.filter(rt => checkRisk(p[rt.id]));
+            let riskCount = activeRisks.length;
+
+            let hex = '#16A34A'; 
+            let twClass = 'bg-green-600';
+            let svgIcon = '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>';
+
+            if (riskCount >= 2) {
+                hex = '#EF4444';
+                twClass = 'bg-red-500';
+                svgIcon = '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+
+                if (activeFilter !== 'all' && activeFilter !== 'multi' && activeFilter !== 'aman') {
+                    let activeFilterObj = riskTypes.find(r => r.id === activeFilter);
+                    if (activeFilterObj) {
+                        hex = activeFilterObj.hex;
+                        twClass = activeFilterObj.tw;
+                        svgIcon = activeFilterObj.svgIcon;
+                    }
+                }
+            } else if (riskCount === 1) {
+                hex = activeRisks[0].hex;
+                twClass = activeRisks[0].tw;
+                svgIcon = activeRisks[0].svgIcon;
+            }
+
+            return { activeRisks, riskCount, hex, twClass, svgIcon };
+        }
+
+        function buildFilters() {
+            const container = document.getElementById('filterContainer');
+            let html = `
+                <button data-filter="all" class="filter-btn active px-2 py-1 text-[10px] font-bold rounded bg-gray-800 dark:bg-white text-white dark:text-gray-900 shadow-md transition-all">Semua</button>
+                <button data-filter="aman" class="filter-btn px-2 py-1 text-[10px] font-bold rounded bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-green-500 hover:text-white transition-all">Aman</button>
+                <button data-filter="multi" class="filter-btn px-2 py-1 text-[10px] font-bold rounded bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 hover:bg-rose-500 hover:text-white transition-all">Multi Risiko</button>
+            `;
+            riskTypes.forEach(rt => {
+                html += `<button data-filter="${rt.id}" class="filter-btn px-2 py-1 text-[10px] font-bold rounded bg-gray-200/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 transition-all hover:text-white" onmouseover="this.style.backgroundColor='${rt.hex}'" onmouseout="if(!this.classList.contains('active')) this.style.backgroundColor=''">${rt.name}</button>`;
+            });
+            container.innerHTML = html;
+
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.filter-btn').forEach(b => {
+                        b.classList.remove('active', 'bg-gray-800', 'dark:bg-white', 'text-white', 'dark:text-gray-900', 'shadow-md');
+                        if(!['all','aman','multi'].includes(b.dataset.filter)) b.style.backgroundColor = '';
+                    });
+
+                    const target = e.currentTarget;
+                    target.classList.add('active');
+                    if (target.dataset.filter === 'all') {
+                        target.classList.add('bg-gray-800', 'dark:bg-white', 'text-white', 'dark:text-gray-900', 'shadow-md');
+                    } else {
+                        const rt = riskTypes.find(r => r.id === target.dataset.filter);
+                        if(rt) target.style.backgroundColor = rt.hex;
+                        target.classList.add('text-white');
+                    }
+
+                    currentFilter = target.dataset.filter;
+                    applyFilters();
+
+                    const hintDiv = document.getElementById('filterHint');
+                    if (currentFilter !== 'all' && currentFilter !== 'aman' && currentFilter !== 'multi') {
+                        hintDiv.classList.remove('hidden');
+                    } else {
+                        hintDiv.classList.add('hidden');
+                    }
+                });
+            });
+        }
+
+        async function loadData() {
+            buildFilters();
+            try {
+                const res = await fetch(`${LAYER_URL}/query?where=1=1&outFields=*&f=geojson`);
+                const data = await res.json();
+                if(data.features) {
+                    globalFeatures = data.features;
+                    applyFilters(); 
+                    const loader = document.getElementById('loadingScreen');
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.remove(), 700);
+                }
+            } catch (err) {
+                document.getElementById('loadingScreen').innerHTML = '<h2 class="text-red-500 font-bold text-lg">KONEKSI GAGAL</h2>';
+            }
+        }
+
+        function applyFilters() {
+            const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
+            activeFilteredFeatures = globalFeatures.filter(f => {
+                const p = f.properties;
+                const jbt = parseJembatan(p.jembatan);
+
+                const matchText = (jbt.nama || '').toLowerCase().includes(searchVal) || 
+                                  (jbt.no || '').toLowerCase().includes(searchVal) || 
+                                  (p.ruas || '').toLowerCase().includes(searchVal);
+
+                let matchLayer = true;
+                if (currentFilter !== 'all') {
+                    const profile = getRiskProfile(p, 'all'); 
+                    if (currentFilter === 'multi') matchLayer = profile.riskCount >= 2;
+                    else if (currentFilter === 'aman') matchLayer = profile.riskCount === 0;
+                    else matchLayer = checkRisk(p[currentFilter]);
+                }
+                return matchText && matchLayer;
+            });
+
+            // MENAMPILKAN CUSTOM ALERT KETIKA DATA KOSONG
+            if (activeFilteredFeatures.length === 0) {
+                showCustomAlert(
+                    "Data Tidak Ditemukan",
+                    "Tidak ada data jembatan yang sesuai dengan pencarian atau kategori risiko ini."
+                );
+            }
+
+            updateDashboard(activeFilteredFeatures);
+
+            if (geojsonLayer && activeFilteredFeatures.length > 0) {
+                const bounds = geojsonLayer.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14, animate: true, duration: 0.8 });
+                }
+            }
+        }
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+
+        function updateDashboard(features) {
+            renderMap(features);
+            renderSidebar(features);
+            renderTable(features);
+            updateAnalytics(features);
+        }
+
+        function updateAnalytics(features) {
+            let multiRisk = 0;
+            let counts = {};
+            riskTypes.forEach(rt => counts[rt.id] = 0);
+
+            features.forEach(f => {
+                const profile = getRiskProfile(f.properties, 'all');
+                profile.activeRisks.forEach(r => counts[r.id]++);
+                if(profile.riskCount >= 2) multiRisk++; 
+            });
+
+            document.getElementById('stat-total').innerText = features.length;
+            document.getElementById('stat-multi').innerText = multiRisk;
+
+            let listHTML = '';
+            riskTypes.forEach(rt => {
+                listHTML += `
+                    <div class="flex justify-between items-center py-0.5">
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 shadow-sm" style="background-color: ${rt.hex};">
+                                ${rt.svgIcon.replace('w-3 h-3', 'w-2 h-2')}
+                            </div>
+                            <span class="truncate max-w-[150px]">${rt.name}</span>
+                        </div>
+                        <span class="text-gray-900 dark:text-white font-bold">${counts[rt.id]}</span>
+                    </div>`;
+            });
+            document.getElementById('statList').innerHTML = listHTML;
+
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            if (riskChartInstance) riskChartInstance.destroy();
+            const isDark = document.documentElement.classList.contains('dark');
+
+            riskChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: riskTypes.map(rt => rt.name),
+                    datasets: [{
+                        data: riskTypes.map(rt => counts[rt.id]),
+                        backgroundColor: riskTypes.map(rt => rt.hex),
+                        borderWidth: 0,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '68%',
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: isDark ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.9)', titleColor: isDark ? '#fff' : '#000', bodyColor: isDark ? '#ccc' : '#333' } }
+                }
+            });
+        }
+
+        function getDynamicMarkerSize() {
+            const z = map.getZoom();
+            if (z <= 9)  return { size: 16, anchor: 8, icon: 'w-2 h-2' };
+            if (z <= 11) return { size: 22, anchor: 11, icon: 'w-2.5 h-2.5' };
+            if (z <= 14) return { size: 30, anchor: 15, icon: 'w-3.5 h-3.5' };
+            return { size: 38, anchor: 19, icon: 'w-4 h-4' };
+        }
+
+        function centerMapOnMarker(latlng) {
+            if (!latlng) return;
+            activeMarkerLatLng = latlng;
+            const zoom = Math.max(map.getZoom(), 14);
+            const isMobile = window.innerWidth <= 1024;
+            const isLandscape = window.innerHeight < 500;
+
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (isMobile) {
+                offsetY = isLandscape ? window.innerHeight * 0.12 : window.innerHeight * 0.22;
+            } else {
+                const leftSidebar = document.getElementById('leftSidebar');
+                const rightPanel = document.getElementById('rightPanel');
+                const tableContainer = document.getElementById('tableContainer');
+
+                const isLeftOpen = !leftSidebar.classList.contains('hidden-panel');
+                const isRightOpen = !rightPanel.classList.contains('hidden-panel');
+                const isTableOpen = !tableContainer.classList.contains('translate-y-[150%]');
+
+                if (isLeftOpen && !isRightOpen) {
+                    offsetX = 160; 
+                } else if (!isLeftOpen && isRightOpen) {
+                    offsetX = -140; 
+                } else if (!isLeftOpen && !isRightOpen) {
+                    offsetX = 0;
+                } else {
+                    offsetX = 20; 
+                }
+
+                if (isTableOpen) {
+                    offsetY = 30;
+                }
+            }
+
+            const targetPoint = map.project(latlng, zoom).subtract([offsetX, offsetY]);
+            const targetLatLng = map.unproject(targetPoint, zoom);
+
+            map.setView(targetLatLng, zoom, { animate: true, duration: 0.5 });
+        }
+
+        function renderMap(features) {
+            if(geojsonLayer) map.removeLayer(geojsonLayer);
+
+            geojsonLayer = L.geoJSON(features, {
+                pointToLayer: function (feature, latlng) {
+                    const profile = getRiskProfile(feature.properties, currentFilter); 
+                    const dyn = getDynamicMarkerSize();
+
+                    if (profile.riskCount >= 2 && currentFilter === 'all') {
+                        const customHtml = `
+                            <div class="relative flex items-center justify-center rounded-full border border-white shadow-md text-white" style="width: ${dyn.size}px; height: ${dyn.size}px; background-color: #EF4444;">
+                                <div class="${dyn.icon} flex items-center justify-center">
+                                    <svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                </div>
+                                <span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-lg">${profile.riskCount}</span>
+                            </div>
+                        `;
+                        const customIcon = L.divIcon({
+                            className: 'custom-multi-marker',
+                            html: customHtml,
+                            iconSize: [dyn.size, dyn.size],
+                            iconAnchor: [dyn.anchor, dyn.anchor]
+                        });
+                        return L.marker(latlng, { icon: customIcon });
+                    } else {
+                        const showBadge = profile.riskCount >= 2 ? `<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-lg">${profile.riskCount}</span>` : '';
+
+                        const customHtml = `
+                            <div class="relative flex items-center justify-center rounded-full border border-white shadow-sm" style="width: ${dyn.size}px; height: ${dyn.size}px; background-color: ${profile.hex};">
+                                <div class="${dyn.icon} flex items-center justify-center">
+                                    ${profile.svgIcon}
+                                </div>
+                                ${showBadge}
+                            </div>
+                        `;
+                        const customIcon = L.divIcon({
+                            className: 'custom-risk-marker',
+                            html: customHtml,
+                            iconSize: [dyn.size, dyn.size],
+                            iconAnchor: [dyn.anchor, dyn.anchor]
+                        });
+                        return L.marker(latlng, { icon: customIcon });
+                    }
+                },
+                onEachFeature: function (feature, layer) {
+                    const p = feature.properties;
+                    const jbt = parseJembatan(p.jembatan);
+                    const objId = p.OBJECTID || p.objectid;
+                    const profile = getRiskProfile(p, 'all'); 
+
+                    layer.on('click', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        const latlng = layer.getLatLng();
+
+                        if(window.innerWidth <= 1024) {
+                            leftSidebar.classList.remove('mobile-show');
+                            rightPanel.classList.remove('mobile-show');
+                        }
+
+                        updateInsetMarker(latlng);
+                        centerMapOnMarker(latlng);
+                    });
+
+                    let statusBoxClass = "bg-green-500/10 text-green-500 border-green-500/20";
+                    let statusText = "🟢 AMAN (Tanpa Ancaman)";
+                    if (profile.riskCount >= 2) {
+                        statusBoxClass = "bg-rose-500/10 text-rose-500 border-rose-500/20";
+                        statusText = `⚠️ MULTI RISIKO (${profile.riskCount} Ancaman)`;
+                    } else if (profile.riskCount === 1) {
+                        statusBoxClass = "bg-amber-500/10 text-amber-500 border-amber-500/20";
+                        statusText = `⚡ RISIKO TUNGGAL (${profile.activeRisks[0].name})`;
+                    }
+
+                    let risksListHTML = '';
+                    if (profile.riskCount > 0) {
+                        profile.activeRisks.forEach((r, idx) => {
+                            risksListHTML += `<li class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${r.hex}"></span>${idx + 1}. ${r.name}</li>`;
+                        });
+                    } else {
+                        risksListHTML = `<li class="text-gray-400 italic">Tidak ada faktor risiko terdeteksi.</li>`;
+                    }
+
+                    const popupContent = `
+                        <div class="popup-card-container glass bg-white/95 dark:bg-brand-950/95 w-full max-h-[75vh] md:max-h-[380px] rounded-2xl overflow-y-auto shadow-2xl border border-gray-200/50 dark:border-gray-700/50 flex flex-col relative text-xs" onclick="L.DomEvent.stopPropagation(event)">
+                            <button onclick="window.map.closePopup()" class="absolute top-2 left-2 z-[60] w-6 h-6 bg-black/60 hover:bg-red-500 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors border border-white/20 shadow-lg cursor-pointer">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+
+                            <div id="slider-container-${objId}" class="popup-slider-box relative w-full h-28 sm:h-32 bg-gray-200 dark:bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
+                                <div class="animate-pulse text-[10px] text-gray-500 font-bold tracking-widest">MEMUAT VISUAL...</div>
+                            </div>
+
+                            <div class="popup-details-box p-3 space-y-2 flex-1">
+                                <div>
+                                    <h4 class="font-extrabold text-xs text-gray-900 dark:text-white leading-tight">${jbt.nama} - <span class="font-mono text-brand-500">${jbt.no}</span></h4>
+                                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate"><span class="font-semibold">Ruas:</span> ${p.ruas || '-'}</p>
+                                </div>
+
+                                <hr class="border-gray-200/50 dark:border-gray-700/50">
+
+                                <div class="p-1.5 rounded-xl border font-bold text-[10px] text-center ${statusBoxClass}">
+                                    ${statusText}
+                                </div>
+
+                                <div class="space-y-1">
+                                    <div class="font-bold text-[9px] text-gray-400 uppercase tracking-wider">Faktor Risiko Terdeteksi:</div>
+                                    <ul class="space-y-1 pl-1 text-gray-700 dark:text-gray-300 font-medium text-[10px]">
+                                        ${risksListHTML}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    layer.bindPopup(popupContent, { 
+                        autoPan: false, 
+                        closeButton: false,
+                        keepInView: false
+                    });
+                }
+            }).addTo(map);
+
+            if (features.length > 0 && !map._zoomAnimated) {
+                map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30], maxZoom: 14, animate: true, duration: 0.8 });
+            }
+        }
+
+        map.on('zoomend', () => {
+            if (activeFilteredFeatures.length > 0) {
+                renderMap(activeFilteredFeatures);
+            }
+        });
+
+        map.on('popupopen', async function(e) {
+            const layer = e.popup._source;
+            if (!layer || !layer.feature) return;
+
+            const p = layer.feature.properties;
+            const objId = p.OBJECTID || p.objectid;
+
+            const container = document.getElementById(`slider-container-${objId}`);
+            if (!container || container.getAttribute('data-loaded') === 'true') return;
+            try {
+                const attRes = await fetch(`${LAYER_URL}/${objId}/attachments?f=json`);
+                const attData = await attRes.json();
+                if (attData.attachmentInfos && attData.attachmentInfos.length > 0) {
+                    const photos = attData.attachmentInfos;
+                    let slidesHTML = '';
+                    photos.forEach(photo => slidesHTML += `<div class="w-full h-full flex-shrink-0 bg-gray-900"><img src="${LAYER_URL}/${objId}/attachments/${photo.id}" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity"></div>`);
+                    let navHTML = '';
+                    if (photos.length > 1) {
+                        navHTML = `
+                            <button onclick="slidePhoto('${objId}', -1, ${photos.length})" class="absolute left-2 top-1/2 -translate-y-1/2 w-5 h-5 bg-black/50 hover:bg-brand-500 text-white rounded-full flex items-center justify-center backdrop-blur-md z-20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"></path></svg></button>
+                            <button onclick="slidePhoto('${objId}', 1, ${photos.length})" class="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 bg-black/50 hover:bg-brand-500 text-white rounded-full flex items-center justify-center backdrop-blur-md z-20"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"></path></svg></button>
+                            <div id="indicator-${objId}" class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-black/60 text-white text-[8px] font-bold rounded-full backdrop-blur-md z-20">1 / ${photos.length}</div>
+                        `;
+                    }
+                    container.innerHTML = `<div id="track-${objId}" class="w-full h-full flex transition-transform duration-500 ease-out z-0">${slidesHTML}</div>${navHTML}`;
+                } else {
+                    container.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-xs text-gray-400">Visual Tidak Tersedia</div>`;
+                }
+                container.setAttribute('data-loaded', 'true');
+            } catch (error) { container.innerHTML = '<span class="text-red-500 text-xs font-bold">Gagal memuat visual</span>'; }
+        });
+
+        window.slidePhoto = function(objId, direction, totalPhotos) {
+            if (window.sliderState[objId] === undefined) window.sliderState[objId] = 0;
+            window.sliderState[objId] = (window.sliderState[objId] + direction + totalPhotos) % totalPhotos;
+            document.getElementById(`track-${objId}`).style.transform = `translateX(-${window.sliderState[objId] * 100}%)`;
+            document.getElementById(`indicator-${objId}`).innerText = `${window.sliderState[objId] + 1} / ${totalPhotos}`;
+        };
+
+        function renderSidebar(features) {
+            const listDiv = document.getElementById('bridgeList');
+            listDiv.innerHTML = '';
+            features.forEach(f => {
+                const p = f.properties;
+                const jbt = parseJembatan(p.jembatan);
+                const profile = getRiskProfile(p, currentFilter); 
+
+                let dotClass = profile.twClass;
+
+                const item = document.createElement('div');
+                item.className = "p-2.5 bg-white/50 dark:bg-gray-800/50 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-gray-700 transition border border-transparent hover:border-gray-200 dark:hover:border-gray-600 group flex items-center justify-between";
+                item.innerHTML = `
+                    <div class="overflow-hidden">
+                        <div class="font-bold text-xs text-gray-800 dark:text-gray-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400">${jbt.nama}</div>
+                        <div class="text-[10px] text-gray-500 font-mono mt-0.5">${jbt.no}</div>
+                    </div>
+                    <div class="w-2.5 h-2.5 rounded-full ${dotClass} shrink-0 border border-white" style="background-color: ${profile.hex};"></div>
+                `;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    geojsonLayer.eachLayer(layer => { 
+                        if ((layer.feature.properties.OBJECTID || layer.feature.properties.objectid) === (p.OBJECTID || p.objectid)) {
+                            const latlng = layer.getLatLng();
+
+                            if(window.innerWidth <= 1024) {
+                                leftSidebar.classList.remove('mobile-show');
+                            }
+
+                            updateInsetMarker(latlng);
+                            centerMapOnMarker(latlng);
+                            layer.openPopup();
+                        } 
+                    });
+                });
+                listDiv.appendChild(item);
+            });
+        }
+
+        function renderTable(features) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            features.forEach(f => {
+                const p = f.properties;
+                const jbt = parseJembatan(p.jembatan);
+                const profile = getRiskProfile(p, 'all'); 
+
+                let badgesHTML = profile.activeRisks.map(r => `<span class="px-2 py-0.5 text-white text-[9px] rounded-full mr-1 inline-block mb-0.5 font-semibold" style="background-color: ${r.hex}">${r.name}</span>`).join('');
+                if(profile.riskCount === 0) badgesHTML = `<span class="px-2 py-0.5 bg-green-600 text-white text-[9px] rounded-full inline-block mb-0.5 font-semibold">Aman</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-brand-50/50 dark:hover:bg-brand-900/20 transition-colors cursor-pointer";
+                tr.innerHTML = `
+                    <td class="px-3 md:px-5 py-2 font-mono text-xs text-gray-500 align-top">${jbt.no}</td>
+                    <td class="px-3 md:px-5 py-2 font-bold text-gray-800 dark:text-gray-200 align-top">${jbt.nama}</td>
+                    <td class="px-3 md:px-5 py-2 text-xs text-gray-500 truncate max-w-[160px] align-top">${p.ruas || '-'}</td>
+                    <td class="px-3 md:px-5 py-2 align-top whitespace-normal min-w-[180px]">${badgesHTML}</td>
+                `;
+                tr.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    geojsonLayer.eachLayer(layer => { 
+                        if ((layer.feature.properties.OBJECTID || layer.feature.properties.objectid) === (p.OBJECTID || p.objectid)) {
+                            const latlng = layer.getLatLng();
+                            updateInsetMarker(latlng);
+                            centerMapOnMarker(latlng);
+                            layer.openPopup();
+                        } 
+                    });
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        const leftSidebar = document.getElementById('leftSidebar');
+        const rightPanel = document.getElementById('rightPanel');
+        const hideLeftBtn = document.getElementById('hideLeftBtn');
+        const showLeftBtn = document.getElementById('showLeftBtn');
+        const hideRightBtn = document.getElementById('hideRightBtn');
+        const showRightBtn = document.getElementById('showRightBtn');
+
+        function toggleMapResize() {
+            setTimeout(() => { 
+                map.invalidateSize(); 
+                if (activeMarkerLatLng) centerMapOnMarker(activeMarkerLatLng);
+            }, 300);
+        }
+
+        window.addEventListener('resize', toggleMapResize);
+        window.addEventListener('orientationchange', toggleMapResize);
+
+        hideLeftBtn.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) {
+                leftSidebar.classList.remove('mobile-show');
+            } else {
+                leftSidebar.classList.add('hidden-panel');
+            }
+            toggleMapResize();
+        });
+
+        showLeftBtn.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) {
+                leftSidebar.classList.add('mobile-show');
+                rightPanel.classList.remove('mobile-show');
+            } else {
+                leftSidebar.classList.remove('hidden-panel');
+            }
+            toggleMapResize();
+        });
+
+        hideRightBtn.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) {
+                rightPanel.classList.remove('mobile-show');
+            } else {
+                rightPanel.classList.add('hidden-panel');
+            }
+            toggleMapResize();
+        });
+
+        showRightBtn.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) {
+                rightPanel.classList.add('mobile-show');
+                leftSidebar.classList.remove('mobile-show');
+            } else {
+                rightPanel.classList.remove('hidden-panel');
+            }
+            toggleMapResize();
+        });
+
+        document.getElementById('resetViewBtn').addEventListener('click', () => {
+            activeMarkerLatLng = null;
+            map.setView([-6.8, 107.4], 9, { animate: true, duration: 1 });
+            const allBtn = document.querySelector('[data-filter="all"]');
+            if (allBtn) allBtn.click(); 
+        });
+
+        document.getElementById('cardMultiRisk').addEventListener('click', () => {
+            const btnMulti = document.querySelector('[data-filter="multi"]');
+            if(btnMulti) btnMulti.click();
+        });
+
+        document.getElementById('exportCsvBtn').addEventListener('click', () => {
+            if (activeFilteredFeatures.length === 0) {
+                showCustomAlert('Ekspor Gagal', 'Tidak ada data yang tersedia untuk diekspor ke CSV.');
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,No Jembatan,Nama Jembatan,Ruas,Risiko Terdeteksi\n";
+            activeFilteredFeatures.forEach(f => {
+                const p = f.properties;
+                const jbt = parseJembatan(p.jembatan);
+                const profile = getRiskProfile(p, 'all');
+                const risks = profile.activeRisks.map(r => r.name).join('; ');
+                csvContent += `"${jbt.no}","${jbt.nama}","${p.ruas || '-'}","${risks || 'Aman'}"\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "data_risiko_jembatan_ntb.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        const tableContainer = document.getElementById('tableContainer');
+        document.getElementById('toggleTableBtn').addEventListener('click', () => {
+            tableContainer.classList.remove('translate-y-[150%]');
+            toggleMapResize();
+        });
+        document.getElementById('closeTableBtn').addEventListener('click', () => {
+            tableContainer.classList.add('translate-y-[150%]');
+            toggleMapResize();
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            document.getElementById('icon-light').classList.toggle('hidden');
+            document.getElementById('icon-dark').classList.toggle('hidden');
+            if (isDark) { 
+                map.removeLayer(lightBasemap); darkBasemap.addTo(map); 
+                insetMap.removeLayer(insetLightBasemap); insetDarkBasemap.addTo(insetMap);
+            } else { 
+                map.removeLayer(darkBasemap); lightBasemap.addTo(map); 
+                insetMap.removeLayer(insetDarkBasemap); insetLightBasemap.addTo(insetMap);
+            }
+            updateAnalytics(activeFilteredFeatures);
+        });
+
+        loadData();
+    </script>
+</body>
+</html>
